@@ -1,20 +1,20 @@
 #!/bin/bash
 
-EMS_DIR="ems/src/main/res/layout"
-APP_DIR="app/src/main/res/layout"
+SOURCE_DIR="<source-path>"
+DEST_DIR="<destination-path>"
 
 # Check if directories exist
-if [[ ! -d "$EMS_DIR" || ! -d "$APP_DIR" ]]; then
+if [[ ! -d "$DEST_DIR" || ! -d "$SOURCE_DIR" ]]; then
     echo "Error: One or both directories do not exist."
     exit 1
 fi
 
-# Iterate through files in EMS_DIR and remove matching files in APP_DIR
-for file in "$EMS_DIR"/*; do
+# Iterate through files in DEST_DIR and remove matching files in SOURCE_DIR
+for file in "$DEST_DIR"/*; do
     filename=$(basename "$file")  # Extract filename
-    if [[ -f "$APP_DIR/$filename" ]]; then
-        echo "Removing duplicate file: $APP_DIR/$filename"
-        rm -f "$APP_DIR/$filename"
+    if [[ -f "$SOURCE_DIR/$filename" ]]; then
+        echo "Removing duplicate file: $SOURCE_DIR/$filename"
+        rm -f "$SOURCE_DIR/$filename"
     fi
 done
 
