@@ -1,0 +1,21 @@
+#!/bin/bash
+
+EMS_DIR="ems/src/main/res/layout"
+APP_DIR="app/src/main/res/layout"
+
+# Check if directories exist
+if [[ ! -d "$EMS_DIR" || ! -d "$APP_DIR" ]]; then
+    echo "Error: One or both directories do not exist."
+    exit 1
+fi
+
+# Iterate through files in EMS_DIR and remove matching files in APP_DIR
+for file in "$EMS_DIR"/*; do
+    filename=$(basename "$file")  # Extract filename
+    if [[ -f "$APP_DIR/$filename" ]]; then
+        echo "Removing duplicate file: $APP_DIR/$filename"
+        rm -f "$APP_DIR/$filename"
+    fi
+done
+
+echo "Cleanup completed!"
