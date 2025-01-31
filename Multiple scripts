@@ -1,0 +1,217 @@
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.regex.Pattern
+
+fun main() {
+    val fileName =
+        listOf(
+            "file one name",
+            "file two name",
+        )
+
+    // List of directories to search in
+    val searchPaths = "<SOURCE-DIR>"
+    val destinationDirectory = "<DESTINATION-DIR>"
+    findFiles(fileName, searchPaths).forEach { file ->
+        cutAndPasteFile(file.absolutePath, "$destinationDirectory/${file.name}")
+    }
+}
+
+
+fun findFiles(fileNames: List<String>, searchPaths: String): List<File> {
+    val foundFiles = mutableListOf<File>()
+
+    val rootDir = File(searchPaths)
+    if (rootDir.exists() && rootDir.isDirectory) {
+        rootDir.walkTopDown().forEach { file ->
+            if (file.isFile && file.name in fileNames) {
+                foundFiles.add(file)
+            }
+        }
+    }
+
+    return foundFiles
+}
+
+fun cutAndPasteFile(sourcePath: String, destinationPath: String): Boolean {
+    val sourceFile = File(sourcePath)
+    val destinationFile = File(destinationPath)
+
+    return if (sourceFile.exists()) {
+        // Ensure destination directory exists
+        destinationFile.parentFile?.mkdirs()
+
+        // Move file
+        Files.move(
+            sourceFile.toPath(),
+            destinationFile.toPath(),
+            StandardCopyOption.REPLACE_EXISTING
+        )
+        println("File moved successfully: $sourceFile → $destinationFile")
+        true
+    } else {
+        println("Error: Source file does not exist: $sourcePath")
+        false
+    }
+}
+
+fun changePackageName(directory: File, newPackageName: String) {
+    if (!directory.exists() || !directory.isDirectory) {
+        println("Error: Directory not found - ${directory.absolutePath}")
+        return
+    }
+
+    directory.walkTopDown().filter { it.extension == "kt" || it.extension == "java" }
+        .forEach { file ->
+            val lines = file.readLines()
+            val updatedLines = lines.mapIndexed { index, line ->
+                if (index == 0 && line.startsWith("package ")) {
+                    if (file.extension == "java")
+                        "package $newPackageName;"
+                    else
+                        "package $newPackageName"
+                } else {
+                    line
+                }
+            }
+
+            file.writeText(updatedLines.joinToString("\n"))
+            println("Updated package in: ${file.absolutePath}")
+        }
+
+    println("All Kotlin files in '${directory.name}' updated successfully!")
+}
+
+fun moveResourcesFromXmlFiles(
+    xmlDirectory: File,
+    sourceResDirectory: File,
+    targetResDirectory: File
+) {
+    if (!xmlDirectory.exists() || !xmlDirectory.isDirectory) {
+        println("Error: XML directory not found - ${xmlDirectory.absolutePath}")
+        return
+    }
+    println(xmlDirectory)
+
+    if (!sourceResDirectory.exists() || !sourceResDirectory.isDirectory) {
+        println("Error: Source res directory not found - ${sourceResDirectory.absolutePath}")
+        return
+    }
+    println(sourceResDirectory)
+    if (!targetResDirectory.exists()) {
+        targetResDirectory.mkdirs()
+    }
+
+    println(targetResDirectory)
+    val drawableRegex = """@drawable/([\w_]+)""".toRegex()
+    val layoutRegex = """@layout/([\w_]+)""".toRegex()
+
+    val drawables = mutableSetOf<String>()
+    val layouts = mutableSetOf<String>()
+
+    // Scan XML files for drawables and layouts
+    xmlDirectory.walkTopDown().filter { it.extension == "xml" }.forEach { file ->
+        val content = file.readText()
+
+        drawableRegex.findAll(content).forEach { match -> drawables.add(match.groupValues[1]) }
+        layoutRegex.findAll(content).forEach { match -> layouts.add(match.groupValues[1]) }
+    }
+
+    println("Found drawables: $drawables")
+    println("Found layouts: $layouts")
+
+    // Move drawable files
+    moveResourceFiles("drawable", drawables, sourceResDirectory, targetResDirectory)
+
+    // Move layout files
+    moveResourceFiles("layout", layouts, sourceResDirectory, targetResDirectory)
+
+    println("Resource migration completed!")
+}
+
+private fun moveResourceFiles(
+    resourceType: String,
+    resourceNames: Set<String>,
+    sourceResDirectory: File,
+    targetResDirectory: File
+) {
+    val sourceDir = File(sourceResDirectory, "res/$resourceType")
+    val targetDir = File(targetResDirectory, "res/$resourceType")
+
+    if (!sourceDir.exists()) {
+        println("Skipping $resourceType - Source directory does not exist: ${sourceDir.absolutePath}")
+        return
+    }
+
+    if (!targetDir.exists()) {
+        targetDir.mkdirs()
+    }
+
+    resourceNames.forEach { resourceName ->
+        val sourceFile = sourceDir.walkTopDown().find { it.name.startsWith(resourceName) }
+        sourceFile?.let {
+            val destFile = File(targetDir, it.name)
+            it.copyTo(destFile, overwrite = true)
+            it.delete()
+            println("Moved $resourceType: ${it.name} -> ${destFile.absolutePath}")
+        }
+    }
+}
+
+
+fun removeDuplicateFiles(sourceDir: File, destDir: File) {
+    if (!sourceDir.exists() || !sourceDir.isDirectory || !destDir.exists() || !destDir.isDirectory) {
+        println("Error: One or both directories do not exist.")
+        return
+    }
+
+    destDir.listFiles()?.forEach { destFile ->
+        val sourceFile = File(sourceDir, destFile.name)
+        if (sourceFile.exists() && sourceFile.isFile) {
+            println("Removing duplicate file: ${sourceFile.absolutePath}")
+            sourceFile.delete()
+        }
+    }
+
+    println("Cleanup completed!")
+}
+
+fun replaceDimenReferencesInDirectory(directory: File) {
+    // Regular expressions to match dp and sp dimensions
+    val dpPattern = Pattern.compile("@dimen/dp_(\\d+)")
+    val spPattern = Pattern.compile("@dimen/sp_(\\d+)")
+
+    // Get all XML files in the directory (recursively if needed)
+    val xmlFiles = directory.walk().filter { it.isFile && it.extension == "xml" }.toList()
+
+    // Process each XML file
+    xmlFiles.forEach { file ->
+        // Read the file content
+        val lines = file.readLines()
+
+        // Replace occurrences of @dimen/dp_* and @dimen/sp_*
+        val updatedLines = lines.map { line ->
+            var modifiedLine = line
+
+            // Replace dp references
+            val dpMatcher = dpPattern.matcher(line)
+            while (dpMatcher.find()) {
+                val dpValue = dpMatcher.group(1)
+                modifiedLine = modifiedLine.replace(dpMatcher.group(0), "@dimen/_${dpValue}sdp")
+            }
+
+            // Replace sp references
+            val spMatcher = spPattern.matcher(modifiedLine)
+            while (spMatcher.find()) {
+                val spValue = spMatcher.group(1)
+                modifiedLine = modifiedLine.replace(spMatcher.group(0), "@dimen/_${spValue}ssp")
+            }
+
+            modifiedLine
+        }
+
+        // Write the updated lines back to the same file
+        file.writeText(updatedLines.joinToString("\n"))
+    }
+}
