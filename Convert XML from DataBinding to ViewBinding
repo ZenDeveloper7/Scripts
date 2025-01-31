@@ -1,0 +1,94 @@
+import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.transform.TransformerFactory
+import javax.xml.transform.dom.DOMSource
+import javax.xml.transform.stream.StreamResult
+
+fun main() {
+
+    val xmlDir = File("<LAYOUT-DIR>")
+    val xmlFiles = mutableListOf<File>()
+
+    // Collect all XML files recursively
+    fun collectXmlFiles(file: File) {
+        when {
+            file.isDirectory -> file.listFiles()?.forEach { collectXmlFiles(it) }
+            file.extension.equals("xml", ignoreCase = true) -> xmlFiles.add(file)
+        }
+    }
+
+    collectXmlFiles(xmlDir)
+
+    if (xmlFiles.isEmpty()) {
+        println("No XML files found in directory: ${xmlDir.absolutePath}")
+        return
+    }
+
+    xmlFiles.forEach { xmlFile ->
+        try {
+            val doc = DocumentBuilderFactory.newInstance()
+                .newDocumentBuilder()
+                .parse(xmlFile)
+
+            val layoutRoot = doc.documentElement
+            if (layoutRoot.tagName != "layout") {
+                println("${xmlFile.name}: Not a Data Binding layout. Skipping.")
+                return@forEach
+            }
+
+            val newRoot = findFirstNonDataElement(layoutRoot) ?: run {
+                println("${xmlFile.name}: No valid root element found. Skipping.")
+                return@forEach
+            }
+
+            transferNamespaces(layoutRoot, newRoot)
+            removeDataElements(doc)
+            doc.replaceChild(newRoot, layoutRoot)
+            writeModifiedXml(doc, xmlFile)
+
+            println("Successfully converted: ${xmlFile.absolutePath}")
+        } catch (e: Exception) {
+            println("Error processing ${xmlFile.name}: ${e.message}")
+        }
+    }
+}
+
+// Rest of the helper functions remain the same as previous version
+private fun findFirstNonDataElement(layoutRoot: org.w3c.dom.Element): org.w3c.dom.Element? {
+    for (i in 0 until layoutRoot.childNodes.length) {
+        val node = layoutRoot.childNodes.item(i)
+        if (node.nodeType == org.w3c.dom.Node.ELEMENT_NODE && node.nodeName != "data") {
+            return node as org.w3c.dom.Element
+        }
+    }
+    return null
+}
+
+private fun transferNamespaces(source: org.w3c.dom.Element, target: org.w3c.dom.Element) {
+    val attributes = source.attributes
+    for (i in 0 until attributes.length) {
+        val attr = attributes.item(i)
+        if (attr.nodeName.startsWith("xmlns")) {
+            target.setAttribute(attr.nodeName, attr.nodeValue)
+        }
+    }
+}
+
+private fun removeDataElements(doc: org.w3c.dom.Document) {
+    val dataNodes = doc.getElementsByTagName("data")
+    while (dataNodes.length > 0) {
+        dataNodes.item(0).parentNode.removeChild(dataNodes.item(0))
+    }
+}
+
+private fun writeModifiedXml(doc: org.w3c.dom.Document, file: File) {
+    val transformer = TransformerFactory.newInstance().newTransformer().apply {
+        setOutputProperty(javax.xml.transform.OutputKeys.INDENT, "yes")
+        setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "4")
+        setOutputProperty(javax.xml.transform.OutputKeys.OMIT_XML_DECLARATION, "no")
+    }
+
+    transformer.transform(DOMSource(doc), StreamResult(file))
+}
+
+main()
